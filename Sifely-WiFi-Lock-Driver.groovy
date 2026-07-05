@@ -1,38 +1,10 @@
-/*
- *  Sifely WiFi Lock Driver for Hubitat
- *
- *  Version: 0.1-beta
- *  Author: Dave Howard with ChatGPT/Jarvis assistance
- *
- *  Description:
- *  Unofficial Hubitat cloud driver for Sifely S WiFi smart locks.
- *
- *  Tested with:
- *    - Sifely S Model WiFi
- *    - Sifely S WiFi
- *
- *  Notes:
- *    - This is an unofficial cloud-based integration.
- *    - Built-in WiFi Sifely locks do not require the Sifely gateway.
- *    - BLE-only Sifely locks may require the Sifely WiFi gateway, but that is untested.
- *    - Remote unlock is disabled by default for safety.
- *    - Sifely cloud state updates may require ~10–20 seconds after a lock/unlock event.
- *
- *  Security:
- *    - Do not post logs containing tokens, account details, passwords, hashes, or lock IDs.
- *    - Debug logging does not intentionally print API response bodies.
- *
- *  License:
- *    MIT
- */
-
 import java.security.MessageDigest
 
 metadata {
     definition(
         name: "Sifely WiFi Lock",
         namespace: "dave",
-        author: "Dave Howard / ChatGPT"
+        author: "ChatGPT"
     ) {
         capability "Actuator"
         capability "Sensor"
@@ -73,7 +45,7 @@ metadata {
         input name: "lockId",
               type: "text",
               title: "Sifely Lock ID",
-              description: "Enter the Sifely lockId for this lock.",
+              description: "BedroomDoor = 29495890",
               required: true
 
         input name: "allowRemoteLock",
@@ -85,13 +57,6 @@ metadata {
               type: "bool",
               title: "Allow Hubitat to unlock this Sifely lock",
               defaultValue: false
-
-        input name: "refreshAfterCommandSeconds",
-              type: "number",
-              title: "Seconds to wait before refresh after lock/unlock",
-              defaultValue: 20,
-              range: "10..60",
-              required: true
 
         input name: "logEnable",
               type: "bool",
@@ -180,7 +145,6 @@ private Boolean login() {
     String baseUrl = getBaseUrl()
     if (!baseUrl) {
         sendEvent(name: "apiStatus", value: "Missing API base URL")
-        log.warn "Missing API base URL"
         return false
     }
 
@@ -305,10 +269,6 @@ private void refreshLockDetails() {
 
     try {
         httpPost(params) { resp ->
-            if (logEnable) {
-                log.debug "Sifely lock list HTTP status: ${resp.status}"
-            }
-
             def data = resp.data
             def locks = extractLockList(data)
 
@@ -326,14 +286,7 @@ private void refreshLockDetails() {
                         Integer batt = thisLock.electricQuantity as Integer
                         sendEvent(name: "battery", value: batt, unit: "%")
                     }
-                } else {
-                    sendEvent(name: "lastError", value: "Lock ID not found in Sifely lock list")
-                    log.warn "Sifely Lock ID ${id} not found in lock list"
                 }
-            } else {
-                String msg = data?.message ?: "Unexpected lock list response"
-                sendEvent(name: "lastError", value: msg)
-                log.warn "Sifely lock detail refresh failed: ${msg}"
             }
         }
     } catch (Exception e) {
@@ -344,7 +297,6 @@ private void refreshLockDetails() {
 private void sendLockCommand(String action) {
     if (!lockId) {
         sendEvent(name: "apiStatus", value: "Missing Lock ID")
-        log.warn "Missing Lock ID"
         return
     }
 
@@ -373,23 +325,15 @@ private void sendLockCommand(String action) {
 
     try {
         httpPost(params) { resp ->
-            if (logEnable) {
-                log.debug "Sifely ${action} HTTP status: ${resp.status}"
-            }
-
             def data = resp.data
-            String message = data?.message?.toString() ?: ""
 
-            if (resp.status == 200 && (data?.code == 200 || message.toLowerCase().contains("success"))) {
+            if (resp.status == 200 && (data?.code == 200 || data?.message?.toString()?.toLowerCase()?.contains("success"))) {
                 sendEvent(name: "apiStatus", value: "${action} command sent - waiting for cloud update")
-                sendEvent(name: "lastError", value: "")
-
                 log.info "Sifely ${action} command sent for lock ${id}"
 
-                Integer delaySeconds = refreshAfterCommandSeconds ? refreshAfterCommandSeconds.toInteger() : 20
-                runIn(delaySeconds, "refresh")
+                runIn(20, "refresh")
             } else {
-                String msg = message ?: "Unexpected ${action} response"
+                String msg = data?.message ?: "Unexpected ${action} response"
                 sendEvent(name: "apiStatus", value: "${action} failed: ${msg}")
                 sendEvent(name: "lastError", value: msg)
                 log.warn "Sifely ${action} failed: ${msg}"
@@ -404,9 +348,9 @@ private void handleCloudOrApiError(String label, Exception e) {
     String msg = e.message ?: "Unknown error"
 
     if (msg.contains("status code: 400")) {
-        sendEvent(name: "apiStatus", value: "${label} not ready - wait, then refresh")
-        sendEvent(name: "lastError", value: "Sifely cloud returned 400; likely timing/update delay")
-        log.warn "${label}: Sifely cloud returned 400; wait before polling again"
+        sendEvent(name: "apiStatus", value: "${label} not ready - wait 20 sec, then refresh")
+        sendEvent(name: "lastError", value: "Sifely cloud returned 400; likely update delay")
+        log.warn "${label}: Sifely cloud returned 400; wait 20 sec before polling again"
         return
     }
 
