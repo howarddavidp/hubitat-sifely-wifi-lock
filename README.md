@@ -101,3 +101,52 @@ In Hubitat:
 
 ```text
 https://raw.githubusercontent.com/howarddavidp/hubitat-sifely-wifi-lock/main/Sifely-WiFi-Lock-Driver.groovy
+
+Click Import
+Click Save
+Option 2: Manual Install
+Open Sifely-WiFi-Lock-Driver.groovy
+Copy the entire file contents
+In Hubitat, go to Drivers Code
+Click + Add Driver
+Paste the code
+Click Save
+Creating a Lock Device in Hubitat
+
+After installing the driver:
+
+Go to Devices
+Click Add Device
+Choose Virtual
+Create a new virtual device
+Set the device type/driver to:
+Sifely WiFi Lock
+Open the new device
+Enter your Sifely account email and password in device preferences
+Enter the Sifely lockId
+Save preferences
+Click Refresh
+Finding Your Sifely Lock ID
+
+The driver currently requires the Sifely lockId for each lock.
+
+For my initial testing, I used a temporary test driver to list my Sifely locks and identify their lock IDs. Future versions may make this easier.
+
+Do not publicly post your lock IDs unless you are comfortable sharing them.
+
+Important Security Warning
+
+Do not post logs or screenshots containing:
+
+Sifely tokens
+Access tokens
+Password hashes
+Account email
+Phone number
+Home IP address
+Lock IDs, unless you intentionally want to disclose them
+Current Status
+
+This is beta code and currently tested only on my two Sifely S built-in WiFi locks.
+
+Feedback, cleanup suggestions, and testing from other Sifely users are welcome.
