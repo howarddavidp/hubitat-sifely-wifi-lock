@@ -1,5 +1,20 @@
 # Unofficial Sifely S WiFi Lock Driver for Hubitat
 
+## Status Update
+
+A session/token refresh issue has been observed after extended runtime, where the driver may require **Test Login** before commands work again.
+
+A v0.2 test build is currently being tested with:
+- proactive token refresh
+- authentication-failure detection
+- automatic re-login and retry
+
+The current v0.1 driver remains usable, but users may need to press **Test Login** if commands stop working after 24–48 hours.
+
+Do not replace your working driver yet. v0.2 will be posted after testing confirms the fix.
+
+
+
 ## Beta / Proof of Concept
 
 Let me start by setting expectations: I am about 1,000 miles from being any type of developer. I have almost zero current-day coding experience, and I am new to Hubitat within the last 6 months. With regard to smart home automation, I am not the most experienced person here — honestly, I am still a pathetic NOOB in a lot of areas. This is my first attempt at writing any type of integration, driver, or custom Hubitat code. Heck, I cannot even get all of my own automations to work yet.
