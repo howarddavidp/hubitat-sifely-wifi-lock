@@ -1,3 +1,8 @@
+![Release](https://img.shields.io/github/v/release/howarddavidp/hubitat-sifely-wifi-lock)
+![License](https://img.shields.io/github/license/howarddavidp/hubitat-sifely-wifi-lock)
+![Issues](https://img.shields.io/github/issues/howarddavidp/hubitat-sifely-wifi-lock)
+![Stars](https://img.shields.io/github/stars/howarddavidp/hubitat-sifely-wifi-lock?style=social)
+
 # Unofficial Sifely S WiFi Lock Driver for Hubitat
 ## Screenshots
 
