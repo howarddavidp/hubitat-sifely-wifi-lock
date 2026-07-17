@@ -1,10 +1,24 @@
+/*
+ *  Sifely WiFi Lock Driver for Hubitat
+ *
+ *  Version: 1.0.0
+ *  Driver name: Sifely WiFi Lock
+ *  Author: Dave Howard with ChatGPT/Jarvis assistance
+ *
+ *  Version 1.0.0 production release:
+ *    - Keeps the 4-hour proactive token refresh.
+ *    - Optionally forces a fresh login before every lock/unlock command.
+ *    - Adds a List Locks command for discovering lock names and IDs.
+ *    - Retains token-age tracking and one retry after authentication failure.
+ */
+
 import java.security.MessageDigest
 
 metadata {
     definition(
         name: "Sifely WiFi Lock",
         namespace: "dave",
-        author: "ChatGPT"
+        author: "Dave Howard / ChatGPT"
     ) {
         capability "Actuator"
         capability "Sensor"
@@ -14,15 +28,21 @@ metadata {
         capability "Lock"
 
         attribute "apiStatus", "string"
+        attribute "driverVersion", "string"
         attribute "tokenStatus", "string"
+        attribute "tokenAgeHours", "number"
         attribute "lockStateRaw", "string"
         attribute "onlineStatus", "string"
         attribute "sifelyLockName", "string"
         attribute "lastRefresh", "string"
+        attribute "lastLogin", "string"
         attribute "lastError", "string"
+        attribute "lockListSummary", "string"
 
         command "testLogin"
+        command "forceTokenRefresh"
         command "clearToken"
+        command "listLocks"
     }
 
     preferences {
@@ -45,7 +65,6 @@ metadata {
         input name: "lockId",
               type: "text",
               title: "Sifely Lock ID",
-              description: "BedroomDoor = 29495890",
               required: true
 
         input name: "allowRemoteLock",
@@ -57,6 +76,25 @@ metadata {
               type: "bool",
               title: "Allow Hubitat to unlock this Sifely lock",
               defaultValue: false
+
+        input name: "tokenRefreshHours",
+              type: "number",
+              title: "Proactively refresh token after this many hours",
+              defaultValue: 4,
+              range: "1..24",
+              required: true
+
+        input name: "forceAuthBeforeCommands",
+              type: "bool",
+              title: "Force a fresh Sifely login before every lock/unlock command",
+              defaultValue: true
+
+        input name: "refreshAfterCommandSeconds",
+              type: "number",
+              title: "Seconds to wait before refresh after lock/unlock",
+              defaultValue: 20,
+              range: "10..60",
+              required: true
 
         input name: "logEnable",
               type: "bool",
@@ -74,27 +112,118 @@ def updated() {
 }
 
 def initialize() {
-    sendEvent(name: "apiStatus", value: "Sifely WiFi Lock driver ready")
+    unschedule()
+
+    sendEvent(name: "driverVersion", value: "1.0.0")
+    sendEvent(name: "apiStatus", value: "Sifely WiFi Lock v1.0.0 ready")
+
+    /*
+     * Old experimental builds stored accessToken separately.
+     * It is not needed for lock actions, so remove it if present.
+     */
+    state.remove("accessToken")
+
+    updateTokenAgeEvent()
+    scheduleNextTokenRefresh()
 }
 
 def testLogin() {
-    login()
+    login(true)
+}
+
+def forceTokenRefresh() {
+    clearStoredTokenOnly()
+    sendEvent(name: "tokenStatus", value: "Token cleared for forced refresh")
+    login(true)
 }
 
 def clearToken() {
-    state.remove("sifelyToken")
-    state.remove("accessToken")
-    state.remove("userId")
-
+    clearStoredTokenOnly()
     sendEvent(name: "tokenStatus", value: "Token cleared")
+    sendEvent(name: "tokenAgeHours", value: 0)
     sendEvent(name: "apiStatus", value: "Stored token cleared")
-
     log.info "Sifely token cleared"
+}
+
+def scheduledTokenRefresh() {
+    if (logEnable) {
+        log.debug "Sifely scheduled token refresh started"
+    }
+
+    Boolean ok = login(true)
+    sendEvent(name: "tokenStatus", value: ok ? "Token refreshed by schedule" : "Scheduled token refresh failed")
+    scheduleNextTokenRefresh()
+}
+
+def listLocks() {
+    listLocksInternal(false)
+}
+
+private void listLocksInternal(Boolean alreadyRetried) {
+    if (!ensureToken()) {
+        return
+    }
+
+    String baseUrl = getBaseUrl()
+    def params = [
+        uri: "${baseUrl}/v3/lock/list",
+        requestContentType: "application/json",
+        contentType: "application/json",
+        headers: [Authorization: state.sifelyToken],
+        query: [pageNo: 1, pageSize: 100],
+        body: [:],
+        timeout: 30
+    ]
+
+    sendEvent(name: "apiStatus", value: "Requesting Sifely lock list...")
+
+    try {
+        httpPost(params) { resp ->
+            def data = resp.data
+            String msg = getApiMessage(data, "")
+
+            if (isAuthFailureText(msg)) {
+                handleAuthFailureAndRetry("List Locks", alreadyRetried, { listLocksInternal(true) })
+                return
+            }
+
+            def locks = extractLockList(data)
+            if (resp.status == 200 && locks != null) {
+                List<String> entries = []
+                locks.each { item ->
+                    String name = item.lockAlias ?: item.lockName ?: "Unnamed Lock"
+                    String id = item.lockId?.toString() ?: "unknown"
+                    String online = normalizeOnline(item.isOnline)
+                    entries << "${name} | ID=${id} | ${online}"
+                }
+
+                String summary = entries ? entries.join(" ; ") : "No locks returned"
+                sendEvent(name: "lockListSummary", value: summary)
+                sendEvent(name: "apiStatus", value: "List Locks OK - ${entries.size()} lock(s) found")
+                sendEvent(name: "lastError", value: "")
+
+                log.info "Sifely List Locks: ${entries.size()} lock(s) found"
+                entries.each { log.info "Sifely Lock: ${it}" }
+            } else {
+                String failMsg = msg ?: "Unexpected lock list response"
+                sendEvent(name: "apiStatus", value: "List Locks failed: ${failMsg}")
+                sendEvent(name: "lastError", value: failMsg)
+                log.warn "Sifely List Locks failed: ${failMsg}"
+            }
+        }
+    } catch (Exception e) {
+        if (isAuthFailureText(e.message)) {
+            handleAuthFailureAndRetry("List Locks", alreadyRetried, { listLocksInternal(true) })
+        } else {
+            handleCloudOrApiError("List Locks", e)
+        }
+    }
 }
 
 def refresh() {
     if (!lockId) {
         sendEvent(name: "apiStatus", value: "Missing Lock ID")
+        sendEvent(name: "lastError", value: "Missing Lock ID")
         log.warn "Missing Sifely Lock ID"
         return
     }
@@ -103,8 +232,8 @@ def refresh() {
         return
     }
 
-    queryLockState()
-    refreshLockDetails()
+    queryLockState(false)
+    refreshLockDetails(false)
 }
 
 def lock() {
@@ -114,7 +243,7 @@ def lock() {
         return
     }
 
-    sendLockCommand("lock")
+    sendLockCommand("lock", false)
 }
 
 def unlock() {
@@ -124,28 +253,44 @@ def unlock() {
         return
     }
 
-    sendLockCommand("unlock")
+    sendLockCommand("unlock", false)
 }
 
 private Boolean ensureToken() {
-    if (state.sifelyToken) {
+    updateTokenAgeEvent()
+
+    if (state.sifelyToken && !isTokenExpiredByAge()) {
         return true
     }
 
-    return login()
+    if (state.sifelyToken && isTokenExpiredByAge()) {
+        sendEvent(name: "tokenStatus", value: "Token older than refresh interval - refreshing")
+        log.info "Sifely token older than refresh interval; refreshing"
+    }
+
+    return login(true)
 }
 
-private Boolean login() {
+private Boolean login(Boolean forceLogin = false) {
     if (!sifelyAccount || !sifelyPassword) {
         sendEvent(name: "apiStatus", value: "Missing Sifely email or password")
+        sendEvent(name: "lastError", value: "Missing Sifely email or password")
         log.warn "Missing Sifely email or password"
         return false
     }
 
     String baseUrl = getBaseUrl()
+
     if (!baseUrl) {
         sendEvent(name: "apiStatus", value: "Missing API base URL")
+        sendEvent(name: "lastError", value: "Missing API base URL")
+        log.warn "Missing API base URL"
         return false
+    }
+
+    if (!forceLogin && state.sifelyToken && !isTokenExpiredByAge()) {
+        updateTokenAgeEvent()
+        return true
     }
 
     def params = [
@@ -173,17 +318,20 @@ private Boolean login() {
 
             if (resp.status == 200 && data?.code == 200 && data?.data?.sifelyToken) {
                 state.sifelyToken = data.data.sifelyToken
-                state.accessToken = data.data.user?.accessToken
-                state.userId = data.data.userId?.toString()
+                state.tokenCreatedEpochMs = now()
+
+                String loginTime = new Date().format("yyyy-MM-dd HH:mm:ss", location.timeZone)
 
                 sendEvent(name: "apiStatus", value: "Login OK")
                 sendEvent(name: "tokenStatus", value: "Token stored")
+                sendEvent(name: "lastLogin", value: loginTime)
                 sendEvent(name: "lastError", value: "")
+                updateTokenAgeEvent()
 
                 log.info "Sifely login OK"
                 ok = true
             } else {
-                String msg = data?.message ?: "Unexpected login response"
+                String msg = getApiMessage(data, "Unexpected login response")
                 sendEvent(name: "apiStatus", value: "Login failed: ${msg}")
                 sendEvent(name: "lastError", value: msg)
                 log.warn "Sifely login failed: ${msg}"
@@ -191,16 +339,17 @@ private Boolean login() {
             }
         }
     } catch (Exception e) {
+        String msg = e.message ?: "Unknown login error"
         sendEvent(name: "apiStatus", value: "Login error - check logs")
-        sendEvent(name: "lastError", value: e.message)
-        log.error "Sifely login error: ${e.message}"
+        sendEvent(name: "lastError", value: msg)
+        log.error "Sifely login error: ${msg}"
         ok = false
     }
 
     return ok
 }
 
-private void queryLockState() {
+private void queryLockState(Boolean alreadyRetried) {
     String baseUrl = getBaseUrl()
     String id = lockId.trim()
 
@@ -223,7 +372,13 @@ private void queryLockState() {
             }
 
             def data = resp.data
+            String msg = getApiMessage(data, "")
             def rawState = extractStateValue(data)
+
+            if (isAuthFailureText(msg)) {
+                handleAuthFailureAndRetry("Lock state", alreadyRetried, { queryLockState(true) })
+                return
+            }
 
             if (resp.status == 200 && rawState != null) {
                 String raw = rawState.toString()
@@ -234,21 +389,26 @@ private void queryLockState() {
                 sendEvent(name: "apiStatus", value: "Refresh OK")
                 sendEvent(name: "lastRefresh", value: new Date().format("yyyy-MM-dd HH:mm:ss", location.timeZone))
                 sendEvent(name: "lastError", value: "")
+                updateTokenAgeEvent()
 
                 log.info "Sifely lock ${id} state=${raw}, mapped=${mapped}"
             } else {
-                String msg = data?.message ?: "Unexpected state response"
-                sendEvent(name: "apiStatus", value: "Lock state failed: ${msg}")
-                sendEvent(name: "lastError", value: msg)
-                log.warn "Sifely lock state failed: ${msg}"
+                String failMsg = msg ?: "Unexpected state response"
+                sendEvent(name: "apiStatus", value: "Lock state failed: ${failMsg}")
+                sendEvent(name: "lastError", value: failMsg)
+                log.warn "Sifely lock state failed: ${failMsg}"
             }
         }
     } catch (Exception e) {
-        handleCloudOrApiError("Lock state", e)
+        if (isAuthFailureText(e.message)) {
+            handleAuthFailureAndRetry("Lock state", alreadyRetried, { queryLockState(true) })
+        } else {
+            handleCloudOrApiError("Lock state", e)
+        }
     }
 }
 
-private void refreshLockDetails() {
+private void refreshLockDetails(Boolean alreadyRetried) {
     String baseUrl = getBaseUrl()
     String id = lockId.trim()
 
@@ -269,8 +429,18 @@ private void refreshLockDetails() {
 
     try {
         httpPost(params) { resp ->
+            if (logEnable) {
+                log.debug "Sifely lock list HTTP status: ${resp.status}"
+            }
+
             def data = resp.data
+            String msg = getApiMessage(data, "")
             def locks = extractLockList(data)
+
+            if (isAuthFailureText(msg)) {
+                handleAuthFailureAndRetry("Lock details", alreadyRetried, { refreshLockDetails(true) })
+                return
+            }
 
             if (resp.status == 200 && locks != null) {
                 def thisLock = locks.find { it.lockId?.toString() == id }
@@ -286,21 +456,48 @@ private void refreshLockDetails() {
                         Integer batt = thisLock.electricQuantity as Integer
                         sendEvent(name: "battery", value: batt, unit: "%")
                     }
+
+                    updateTokenAgeEvent()
+                } else {
+                    sendEvent(name: "lastError", value: "Lock ID not found in Sifely lock list")
+                    log.warn "Sifely Lock ID ${id} not found in lock list"
                 }
+            } else {
+                String failMsg = msg ?: "Unexpected lock list response"
+                sendEvent(name: "lastError", value: failMsg)
+                log.warn "Sifely lock detail refresh failed: ${failMsg}"
             }
         }
     } catch (Exception e) {
-        handleCloudOrApiError("Lock details", e)
+        if (isAuthFailureText(e.message)) {
+            handleAuthFailureAndRetry("Lock details", alreadyRetried, { refreshLockDetails(true) })
+        } else {
+            handleCloudOrApiError("Lock details", e)
+        }
     }
 }
 
-private void sendLockCommand(String action) {
+private void sendLockCommand(String action, Boolean alreadyRetried) {
     if (!lockId) {
         sendEvent(name: "apiStatus", value: "Missing Lock ID")
+        sendEvent(name: "lastError", value: "Missing Lock ID")
+        log.warn "Missing Lock ID"
         return
     }
 
-    if (!ensureToken()) {
+    Boolean authOk
+    if (forceAuthBeforeCommands && !alreadyRetried) {
+        if (logEnable) {
+            log.debug "Sifely ${action}: forcing fresh login before command"
+        }
+        sendEvent(name: "apiStatus", value: "Refreshing authentication before ${action}...")
+        authOk = login(true)
+    } else {
+        authOk = ensureToken()
+    }
+
+    if (!authOk) {
+        sendEvent(name: "apiStatus", value: "${action} blocked - authentication failed")
         return
     }
 
@@ -325,22 +522,106 @@ private void sendLockCommand(String action) {
 
     try {
         httpPost(params) { resp ->
+            if (logEnable) {
+                log.debug "Sifely ${action} HTTP status: ${resp.status}"
+            }
+
             def data = resp.data
+            String message = getApiMessage(data, "")
 
-            if (resp.status == 200 && (data?.code == 200 || data?.message?.toString()?.toLowerCase()?.contains("success"))) {
-                sendEvent(name: "apiStatus", value: "${action} command sent - waiting for cloud update")
-                log.info "Sifely ${action} command sent for lock ${id}"
+            if (isAuthFailureText(message)) {
+                handleAuthFailureAndRetry("${action} command", alreadyRetried, { sendLockCommand(action, true) })
+                return
+            }
 
-                runIn(20, "refresh")
+            if (resp.status == 200 && isCommandSuccess(data, message)) {
+                sendEvent(name: "apiStatus", value: "${action} command accepted - waiting for cloud update")
+                sendEvent(name: "lastError", value: "")
+                updateTokenAgeEvent()
+
+                log.info "Sifely ${action} command accepted for lock ${id}"
+
+                Integer delaySeconds = refreshAfterCommandSeconds ? refreshAfterCommandSeconds.toInteger() : 20
+                runIn(delaySeconds, "refresh")
             } else {
-                String msg = data?.message ?: "Unexpected ${action} response"
+                String msg = message ?: "Unexpected ${action} response"
                 sendEvent(name: "apiStatus", value: "${action} failed: ${msg}")
                 sendEvent(name: "lastError", value: msg)
                 log.warn "Sifely ${action} failed: ${msg}"
             }
         }
     } catch (Exception e) {
-        handleCloudOrApiError("${action} command", e)
+        if (isAuthFailureText(e.message)) {
+            handleAuthFailureAndRetry("${action} command", alreadyRetried, { sendLockCommand(action, true) })
+        } else {
+            handleCloudOrApiError("${action} command", e)
+        }
+    }
+}
+
+private Boolean isCommandSuccess(data, String message) {
+    String m = message ? message.toString().toLowerCase() : ""
+
+    if (isAuthFailureText(m)) {
+        return false
+    }
+
+    if (
+        m.contains("failed") ||
+        m.contains("failure") ||
+        m.contains("error") ||
+        m.contains("denied") ||
+        m.contains("unable")
+    ) {
+        return false
+    }
+
+    if (data?.code != null) {
+        String code = data.code.toString()
+        if (code == "0" || code == "200") {
+            return true
+        }
+    }
+
+    if (data?.success == true || data?.data?.success == true) {
+        return true
+    }
+
+    if (m.contains("success") || m == "ok") {
+        return true
+    }
+
+    /*
+     * Sifely command calls may return HTTP 200 with a minimal body.
+     * If HTTP 200 has no explicit failure/auth text, treat the command as accepted.
+     */
+    return true
+}
+
+private void handleAuthFailureAndRetry(String label, Boolean alreadyRetried, Closure retryClosure) {
+    sendEvent(name: "tokenStatus", value: "Token rejected/cleared")
+    sendEvent(name: "apiStatus", value: "${label} auth failed - refreshing token")
+    sendEvent(name: "lastError", value: "Authentication failed; token refresh attempted")
+
+    log.warn "${label}: Sifely authentication failed; clearing token"
+
+    clearStoredTokenOnly()
+
+    if (alreadyRetried) {
+        sendEvent(name: "apiStatus", value: "${label} auth failed after retry")
+        sendEvent(name: "lastError", value: "Authentication failed after retry")
+        log.warn "${label}: authentication failed after retry"
+        return
+    }
+
+    Boolean loginOk = login(true)
+
+    if (loginOk) {
+        sendEvent(name: "apiStatus", value: "${label} retrying after token refresh")
+        retryClosure.call()
+    } else {
+        sendEvent(name: "apiStatus", value: "${label} retry blocked - login failed")
+        log.warn "${label}: retry blocked because login failed"
     }
 }
 
@@ -348,24 +629,97 @@ private void handleCloudOrApiError(String label, Exception e) {
     String msg = e.message ?: "Unknown error"
 
     if (msg.contains("status code: 400")) {
-        sendEvent(name: "apiStatus", value: "${label} not ready - wait 20 sec, then refresh")
-        sendEvent(name: "lastError", value: "Sifely cloud returned 400; likely update delay")
-        log.warn "${label}: Sifely cloud returned 400; wait 20 sec before polling again"
+        sendEvent(name: "apiStatus", value: "${label} not ready - wait, then refresh")
+        sendEvent(name: "lastError", value: "Sifely cloud returned 400; likely timing/update delay")
+        log.warn "${label}: Sifely cloud returned 400; wait before polling again"
         return
     }
 
     if (msg.contains("status code: 401") || msg.contains("status code: 403")) {
-        state.remove("sifelyToken")
-        sendEvent(name: "tokenStatus", value: "Token expired/cleared")
-        sendEvent(name: "apiStatus", value: "${label} auth error - run refresh again")
-        sendEvent(name: "lastError", value: msg)
-        log.warn "${label}: auth error, token cleared"
+        handleAuthFailureAndRetry(label, false, { refresh() })
         return
     }
 
     sendEvent(name: "apiStatus", value: "${label} error - check logs")
     sendEvent(name: "lastError", value: msg)
     log.error "Sifely ${label} error: ${msg}"
+}
+
+private void scheduleNextTokenRefresh() {
+    Integer refreshHours = tokenRefreshHours ? tokenRefreshHours.toInteger() : 4
+    Integer seconds = refreshHours * 60 * 60
+
+    runIn(seconds, "scheduledTokenRefresh", [overwrite: true])
+
+    if (logEnable) {
+        log.debug "Next Sifely scheduled token refresh in ${refreshHours} hour(s)"
+    }
+}
+
+private void clearStoredTokenOnly() {
+    state.remove("sifelyToken")
+    state.remove("accessToken")
+    state.remove("userId")
+    state.remove("tokenCreatedEpochMs")
+    updateTokenAgeEvent()
+}
+
+private Boolean isTokenExpiredByAge() {
+    if (!state.tokenCreatedEpochMs) {
+        return true
+    }
+
+    Long created = state.tokenCreatedEpochMs as Long
+    Long ageMs = now() - created
+    Integer refreshHours = tokenRefreshHours ? tokenRefreshHours.toInteger() : 4
+    Long maxAgeMs = refreshHours * 60L * 60L * 1000L
+
+    return ageMs >= maxAgeMs
+}
+
+private void updateTokenAgeEvent() {
+    if (!state.tokenCreatedEpochMs) {
+        sendEvent(name: "tokenAgeHours", value: 0)
+        return
+    }
+
+    Long created = state.tokenCreatedEpochMs as Long
+    BigDecimal ageHours = ((now() - created) / 3600000.0).setScale(2, BigDecimal.ROUND_HALF_UP)
+    sendEvent(name: "tokenAgeHours", value: ageHours)
+}
+
+private Boolean isAuthFailureText(String text) {
+    if (!text) {
+        return false
+    }
+
+    String t = text.toLowerCase()
+
+    return (
+        t.contains("authentication failed") ||
+        t.contains("unable to access system resources") ||
+        t.contains("auth failed") ||
+        t.contains("unauthorized") ||
+        t.contains("forbidden") ||
+        t.contains("token expired") ||
+        t.contains("invalid token")
+    )
+}
+
+private String getApiMessage(data, String fallback) {
+    if (data?.message != null) {
+        return data.message.toString()
+    }
+
+    if (data?.msg != null) {
+        return data.msg.toString()
+    }
+
+    if (data?.error != null) {
+        return data.error.toString()
+    }
+
+    return fallback
 }
 
 private def extractLockList(data) {
@@ -440,3 +794,4 @@ private String md5Hash(String input) {
 
     return digest.collect { String.format("%02x", it & 0xff) }.join()
 }
+
