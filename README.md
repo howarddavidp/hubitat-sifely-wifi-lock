@@ -74,8 +74,15 @@ Remote unlock defaults to disabled and must be enabled deliberately.
 
 ## Planned for Version 1.5.0
 
-- A clearer selectable authentication mode instead of the current tested checkbox behavior
-- Additional diagnostic information
+## Roadmap
+
+### v1.5.0 (Planned)
+
+- Authentication Mode selector
+- Configurable automatic command verification
+- User-adjustable verification timing
+- User-adjustable retry count
+- Improved verification diagnostics
 
 ## License
 
