@@ -75,14 +75,21 @@ Remote unlock defaults to disabled and must be enabled deliberately.
 ## Planned for Version 1.5.0
 
 ## Roadmap
+## 🗺️ Roadmap
 
-### v1.5.0 (Planned)
+### ✅ v1.0.0
+- Lock / Unlock
+- Refresh
+- Multi-lock support
+- Hubitat automation support
+- Automatic token refresh
 
+### 🚧 v1.5.0 (Planned)
 - Authentication Mode selector
-- Configurable automatic command verification
-- User-adjustable verification timing
-- User-adjustable retry count
-- Improved verification diagnostics
+- Configurable command verification
+- Adjustable verification delay
+- Adjustable retry count
+- Improved diagnostics
 
 ## License
 
