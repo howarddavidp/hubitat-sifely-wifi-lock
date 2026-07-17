@@ -1,5 +1,13 @@
 # Unofficial Sifely S WiFi Lock Driver for Hubitat
+## Screenshots
 
+### Driver Commands
+
+![Driver Commands](images/driver-commands.jpg)
+
+### Driver Preferences
+
+![Driver Preferences](images/driver-preferences.jpg)
 An unofficial Hubitat cloud driver for Sifely S WiFi smart locks.
 This project is not affiliated with or endorsed by Sifely.
 
