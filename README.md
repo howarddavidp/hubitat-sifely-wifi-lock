@@ -72,6 +72,18 @@ Remote unlock defaults to disabled and must be enabled deliberately.
 - The driver uses undocumented cloud endpoints that Sifely could change.
 - Do not post credentials, authentication tokens, or identifying lock information in public logs or screenshots.
 
+## Hubitat Automation
+
+This driver works well with Hubitat automation apps, including Basic Rules and Rule Machine.
+
+Example uses:
+
+- Lock all doors when you leave home.
+- Unlock selected doors when you arrive home using presence detection.
+- Include Sifely locks in scenes and custom automations.
+
+These scenarios have been tested successfully during development.
+
 ## Planned for Version 1.5.0
 
 ## Roadmap
