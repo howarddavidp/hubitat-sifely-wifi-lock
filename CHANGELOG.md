@@ -2,12 +2,33 @@
 
 ## 2.0.2 — 2026-11-02 (in testing / prerelease)
 
+See the 1.0.1 entry above for the full Problem / Cause / Fix explanation.
+
 ### Fixed
 - Gateway-paired locks no longer show `onlineStatus = "offline (gateway)"`. Sifely's lock list returns `isOnline=0` for gateway-bridged locks even when they're healthy; the driver now reports `"via gateway"` when `hasGateway=1` and the lock state query succeeds.
 - `lockListSummary` is now refreshed on every `refresh()` (it was only updated by `listLocks`/`testLogin`, so it went stale), and gateway locks show as `via gateway` there.
 
 ### Added
 - `reachable` attribute (`true`/`false`) based on whether the lock state query succeeded.
+
+## 1.0.1 — 2026-11-02 (in testing / prerelease, username/password line)
+
+Backports the 2.0.2 gateway online-status fix to `Sifely-WiFi-Lock-Driver.groovy`. 1.0.0 stays the stable username/password release.
+
+#### Problem
+Hubitat showed Sifely locks as **"offline (gateway)"** even when the Sifely mobile app showed the gateways and locks as **Online**, and even while Hubitat's lock state and battery refreshes were working.
+
+#### Cause
+The driver copied Sifely's `isOnline` flag as-is and labeled `hasGateway=1` + `isOnline=0` as "offline (gateway)". For gateway-paired locks, Sifely can report that flag as `0` while the lock is still reachable through the gateway.
+
+Separately, `lockListSummary` was only updated by `listLocks` / `testLogin`, not by `refresh()`. It went stale, so locks looked online on one device and offline on another.
+
+#### Fix
+- When a gateway-paired lock's state query succeeds, `onlineStatus` now reports **"via gateway"** instead of "offline".
+- `lockListSummary` is refreshed on every `refresh()`, and gateway-paired locks show as "via gateway" there too.
+- New `reachable` attribute (`true` / `false`), based on whether the lock state query succeeded.
+
+No changes to commands or capabilities, so existing rules keep working. If any rule checks for `onlineStatus == "online"`, also allow `"via gateway"`, or use the new `reachable` attribute.
 
 ## 2.0.1 — 2026-11-01
 

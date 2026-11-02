@@ -33,6 +33,7 @@ metadata {
         attribute "tokenAgeHours", "number"
         attribute "lockStateRaw", "string"
         attribute "onlineStatus", "string"
+        attribute "reachable", "string"
         attribute "sifelyLockName", "string"
         attribute "lastRefresh", "string"
         attribute "lastLogin", "string"
@@ -114,7 +115,7 @@ def updated() {
 def initialize() {
     unschedule()
 
-    sendEvent(name: "driverVersion", value: "1.0.0")
+    sendEvent(name: "driverVersion", value: "1.0.1")
     sendEvent(name: "apiStatus", value: "Sifely WiFi Lock v1.0.0 ready")
 
     /*
@@ -193,7 +194,7 @@ private void listLocksInternal(Boolean alreadyRetried) {
                 locks.each { item ->
                     String name = item.lockAlias ?: item.lockName ?: "Unnamed Lock"
                     String id = item.lockId?.toString() ?: "unknown"
-                    String online = normalizeOnline(item.isOnline)
+                    String online = (item.hasGateway?.toString() == "1" && item.isOnline?.toString() in ["0", "false"]) ? "via gateway" : normalizeOnline(item.isOnline)
                     entries << "${name} | ID=${id} | ${online}"
                 }
 
@@ -234,6 +235,7 @@ def refresh() {
 
     queryLockState(false)
     refreshLockDetails(false)
+    listLocksInternal(false)
 }
 
 def lock() {
@@ -385,6 +387,8 @@ private void queryLockState(Boolean alreadyRetried) {
                 String mapped = mapLockState(raw)
 
                 sendEvent(name: "lockStateRaw", value: raw)
+                state.lastStateOk = true
+                sendEvent(name: "reachable", value: "true")
                 sendEvent(name: "lock", value: mapped)
                 sendEvent(name: "apiStatus", value: "Refresh OK")
                 sendEvent(name: "lastRefresh", value: new Date().format("yyyy-MM-dd HH:mm:ss", location.timeZone))
@@ -394,12 +398,16 @@ private void queryLockState(Boolean alreadyRetried) {
                 log.info "Sifely lock ${id} state=${raw}, mapped=${mapped}"
             } else {
                 String failMsg = msg ?: "Unexpected state response"
+                state.lastStateOk = false
+                sendEvent(name: "reachable", value: "false")
                 sendEvent(name: "apiStatus", value: "Lock state failed: ${failMsg}")
                 sendEvent(name: "lastError", value: failMsg)
                 log.warn "Sifely lock state failed: ${failMsg}"
             }
         }
     } catch (Exception e) {
+        state.lastStateOk = false
+        sendEvent(name: "reachable", value: "false")
         if (isAuthFailureText(e.message)) {
             handleAuthFailureAndRetry("Lock state", alreadyRetried, { queryLockState(true) })
         } else {
@@ -447,7 +455,7 @@ private void refreshLockDetails(Boolean alreadyRetried) {
 
                 if (thisLock) {
                     String name = thisLock.lockAlias ?: thisLock.lockName ?: "Sifely Lock"
-                    String online = normalizeOnline(thisLock.isOnline)
+                    String online = (thisLock.hasGateway?.toString() == "1" && state.lastStateOk == true && thisLock.isOnline?.toString() in ["0", "false"]) ? "via gateway" : normalizeOnline(thisLock.isOnline)
 
                     sendEvent(name: "sifelyLockName", value: name)
                     sendEvent(name: "onlineStatus", value: online)
