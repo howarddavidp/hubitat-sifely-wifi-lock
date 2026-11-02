@@ -37,6 +37,7 @@ metadata {
         attribute "tokenAgeHours", "number"
         attribute "lockStateRaw", "string"
         attribute "onlineStatus", "string"
+        attribute "reachable", "string"
         attribute "sifelyLockName", "string"
         attribute "lastRefresh", "string"
         attribute "lastLogin", "string"
@@ -97,7 +98,7 @@ metadata {
     }
 }
 
-private String driverVer() { return "2.0.1" }
+private String driverVer() { return "2.0.2" }
 
 def installed() { initialize() }
 
@@ -154,6 +155,7 @@ def refresh() {
     if (!checkConfig()) return
     queryLockState()
     refreshLockDetails()
+    listLocksInternal(false)
 }
 
 def lock() {
@@ -213,12 +215,18 @@ private void queryLockState() {
                 sendEvent(name: "apiStatus", value: "Refresh OK")
                 sendEvent(name: "lastRefresh", value: nowText())
                 sendEvent(name: "lastError", value: "none")
+                state.lastStateOk = true
+                sendEvent(name: "reachable", value: "true")
                 log.info "Sifely lock ${id} state=${raw}, mapped=${mapped}"
             } else {
+                state.lastStateOk = false
+                sendEvent(name: "reachable", value: "false")
                 setError("Lock state failed: ${getApiMessage(data, 'Unexpected state response')}")
             }
         }
     } catch (Exception e) {
+        state.lastStateOk = false
+        sendEvent(name: "reachable", value: "false")
         handleHttpError("Lock state", e)
     }
 }
@@ -233,7 +241,7 @@ private void refreshLockDetails() {
                 def thisLock = locks.find { it.lockId?.toString() == id }
                 if (thisLock) {
                     sendEvent(name: "sifelyLockName", value: thisLock.lockAlias ?: thisLock.lockName ?: "Sifely Lock")
-                    sendEvent(name: "onlineStatus", value: normalizeOnline(thisLock.isOnline, thisLock.hasGateway))
+                    sendEvent(name: "onlineStatus", value: (thisLock.hasGateway?.toString() == "1" && state.lastStateOk == true && thisLock.isOnline?.toString() in ["0", "false"]) ? "via gateway" : normalizeOnline(thisLock.isOnline, thisLock.hasGateway))
                     if (thisLock.electricQuantity != null) {
                         sendEvent(name: "battery", value: thisLock.electricQuantity as Integer, unit: "%")
                     }
@@ -264,7 +272,7 @@ private Boolean listLocksInternal(Boolean report) {
                 List<String> entries = []
                 locks.each { item ->
                     String name = item.lockAlias ?: item.lockName ?: "Unnamed Lock"
-                    entries << "${name} | ID=${item.lockId} | ${normalizeOnline(item.isOnline, item.hasGateway)}"
+                    entries << "${name} | ID=${item.lockId} | ${(item.hasGateway?.toString() == "1" && item.isOnline?.toString() in ["0", "false"]) ? "via gateway" : normalizeOnline(item.isOnline, item.hasGateway)}"
                 }
                 sendEvent(name: "lockListSummary", value: entries ? entries.join(" ; ") : "No locks returned")
                 sendEvent(name: "apiStatus", value: "List Locks OK - ${entries.size()} lock(s) found")

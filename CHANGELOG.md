@@ -1,5 +1,14 @@
 # Changelog
 
+## 2.0.2 — 2026-11-02 (in testing / prerelease)
+
+### Fixed
+- Gateway-paired locks no longer show `onlineStatus = "offline (gateway)"`. Sifely's lock list returns `isOnline=0` for gateway-bridged locks even when they're healthy; the driver now reports `"via gateway"` when `hasGateway=1` and the lock state query succeeds.
+- `lockListSummary` is now refreshed on every `refresh()` (it was only updated by `listLocks`/`testLogin`, so it went stale), and gateway locks show as `via gateway` there.
+
+### Added
+- `reachable` attribute (`true`/`false`) based on whether the lock state query succeeded.
+
 ## 2.0.1 — 2026-11-01
 
 Open API key driver (recommended).
