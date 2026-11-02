@@ -1,0 +1,28 @@
+{
+  "author": "howarddavidp",
+  "gitHubUrl": "https://github.com/howarddavidp",
+  "packages": [
+    {
+      "name": "Sifely WiFi Lock v2 (API key)",
+      "location": "https://raw.githubusercontent.com/howarddavidp/hubitat-sifely-wifi-lock/main/packageManifest.json",
+      "description": "Recommended. Cloud driver for Sifely/TTLock WiFi & gateway locks using a Sifely Open API key.",
+      "id": "a1d4e7b0-5c2f-4e8a-9d3b-6f1e2c4a8b07",
+      "category": "Integrations",
+      "tags": [
+        "Locks",
+        "Cloud"
+      ]
+    },
+    {
+      "name": "Sifely WiFi Lock v1 (username/password, legacy)",
+      "location": "https://raw.githubusercontent.com/howarddavidp/hubitat-sifely-wifi-lock/main/packageManifest-v1.json",
+      "description": "Legacy Sifely driver using Sifely app username/password. Use v2 for new installs.",
+      "id": "b2e5f8c1-6d3a-4f9b-8e4c-7a2f3d5b9c18",
+      "category": "Integrations",
+      "tags": [
+        "Locks",
+        "Cloud"
+      ]
+    }
+  ]
+}

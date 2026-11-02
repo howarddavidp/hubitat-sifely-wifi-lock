@@ -118,3 +118,11 @@ No changes to commands or capabilities, so existing rules keep working. If any r
 ## License
 
 MIT License. See `LICENSE`.
+
+## Install with Hubitat Package Manager (HPM)
+
+Once listed, search HPM for **Sifely**:
+- **Sifely WiFi Lock v2 (API key)** — recommended, installs stable v2.0.1.
+- **Sifely WiFi Lock v1 (username/password, legacy)** — installs stable v1.0.0.
+
+Testing builds (v2.0.2 / v1.0.1) are offered only if you enable HPM's beta option for that package.

@@ -1,0 +1,21 @@
+{
+  "packageName": "Sifely WiFi Lock v2 (API key)",
+  "author": "howarddavidp",
+  "version": "2.0.1",
+  "betaVersion": "2.0.2",
+  "minimumHEVersion": "2.2.0",
+  "dateReleased": "2026-11-02",
+  "documentationLink": "https://github.com/howarddavidp/hubitat-sifely-wifi-lock#readme",
+  "releaseNotes": "Stable v2.0.1 - recommended. Uses Sifely Open API key. See RELEASE_NOTES.md.",
+  "betaReleaseNotes": "Pre-release: gateway-paired locks now show 'via gateway' instead of 'offline (gateway)' when the Sifely cloud reports isOnline=0 but state/battery queries succeed; lockListSummary now refreshes on refresh(). See RELEASE_NOTES.md.",
+  "drivers": [
+    {
+      "id": "3f6b2c1e-8a4d-4c7e-9b1a-2d5e6f708192",
+      "name": "Sifely WiFi Lock v2",
+      "namespace": "dave",
+      "location": "https://raw.githubusercontent.com/howarddavidp/hubitat-sifely-wifi-lock/v2.0.1/Sifely-WiFi-Lock-Driver-v2.groovy",
+      "betaLocation": "https://raw.githubusercontent.com/howarddavidp/hubitat-sifely-wifi-lock/v2.0.2-testing/Sifely-WiFi-Lock-Driver-v2.groovy",
+      "required": true
+    }
+  ]
+}
