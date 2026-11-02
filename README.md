@@ -4,6 +4,10 @@
 ![Stars](https://img.shields.io/github/stars/howarddavidp/hubitat-sifely-wifi-lock?style=social)
 
 # Unofficial Sifely S WiFi Lock Driver for Hubitat
+
+An unofficial Hubitat cloud driver for Sifely S WiFi smart locks.
+This project is not affiliated with or endorsed by Sifely.
+
 ## Screenshots
 
 ### Driver Commands
@@ -13,100 +17,62 @@
 ### Driver Preferences
 
 ![Driver Preferences](images/driver-preferences.jpg)
-An unofficial Hubitat cloud driver for Sifely S WiFi smart locks.
-This project is not affiliated with or endorsed by Sifely.
 
 ## Current Release
 
-**Version 1.0.0 — Production Release**
+**Version 2.0.1 — Recommended (Open API key)**
 
-Version 1.0.0 is the production release of the tested internal build **0.3-test Version D**. The production file retains the tested Version D behavior; only the public version and driver name were changed.
+Use **`Sifely-WiFi-Lock-Driver-v2.groovy`**. It authenticates with a Sifely Open API key from [connect.sifely.com](https://connect.sifely.com) against `https://cus-openapi.sifely.com` (`Authorization: sk-...`, no Bearer).
 
-## Tested Functions
+**Version 1.0.0 — Legacy (email/password)** remains in `Sifely-WiFi-Lock-Driver.groovy` for reference. The legacy `app-smart-server.sifely.com` login path has been failing with "authentication failed" since about 2026-09-29; prefer v2 for new installs and for existing locks that stopped responding.
 
-- Manual lock and unlock
-- Refresh and physical lock-state synchronization
-- Scheduled proactive token refresh, default 4 hours
-- Fresh authentication before lock and unlock commands when enabled
-- Authentication-failure detection with one retry
-- **List Locks**, including lock names, Lock IDs, and online status
-- Multiple Sifely locks on one account
-- Hubitat Basic Rules
-- Geofence departure locking
-- Geofence arrival unlocking
+## Which file should I install?
 
-## Features
+| File | Driver type in Hubitat | Auth | Status |
+|------|------------------------|------|--------|
+| `Sifely-WiFi-Lock-Driver-v2.groovy` | **Sifely WiFi Lock v2** | Open API key (`sk-...`) | **Recommended** |
+| `Sifely-WiFi-Lock-Driver.groovy` | Sifely WiFi Lock | Account email + password | Legacy |
 
-- Hubitat Lock capability
-- Lock and unlock commands
-- Battery reporting
-- Online/offline status
-- Sifely lock name
-- Configurable proactive token refresh
-- Optional fresh authentication before each lock/unlock command
-- Delayed post-command refresh
-- Diagnostic login, token refresh, token clearing, and lock-list commands
+v2 keeps the same capabilities, attributes, and command names as v1 so existing rules keep working after you switch the device type and enter the API key.
 
-## Installation
+## Installation (v2 — recommended)
 
 1. In Hubitat, open **Drivers Code**.
-2. Choose **New Driver**, or open the prior Sifely driver to replace it.
-3. Copy the contents of `Sifely-WiFi-Lock-Driver.groovy`.
-4. Paste the code into Hubitat and select **Save**.
-5. Assign the driver type **Sifely WiFi Lock** to each Sifely device.
-6. Enter the Sifely account email, password, and Lock ID.
+2. Choose **New Driver** (or open an existing Sifely driver to replace it).
+3. Copy the contents of `Sifely-WiFi-Lock-Driver-v2.groovy`.
+4. Paste into Hubitat and select **Save**.
+5. Assign the driver type **Sifely WiFi Lock v2** to each Sifely device.
+6. Enter your **Sifely Open API key** from connect.sifely.com and the Lock ID.
 7. Enable remote locking and remote unlocking as appropriate.
-8. Select **Save Preferences**, then run **Initialize** and **Refresh**.
+8. Select **Save Preferences**, then run **Initialize**, **testLogin** (validates the key), and **Refresh**.
+
+Legacy username/password preference fields may still appear on v2; they are unused.
+
+## Installation (v1 — legacy)
+
+1. Copy `Sifely-WiFi-Lock-Driver.groovy` into Drivers Code.
+2. Assign driver type **Sifely WiFi Lock**.
+3. Enter Sifely account email, password, and Lock ID.
+4. Save Preferences, then Initialize / Refresh.
 
 ## Finding Lock IDs
 
 Run **List Locks** from the Hubitat device page. The driver logs each lock and records a summary in the `lockListSummary` attribute.
 
-## Recommended Tested Settings
+## Features
 
-- Proactive token refresh: **4 hours**
-- Force fresh login before every lock/unlock command: **Enabled**
-- Refresh after command: **20 seconds**
-
-Remote unlock defaults to disabled and must be enabled deliberately.
+- Hubitat Lock capability (lock / unlock)
+- Battery reporting
+- Online/offline status and Sifely lock name
+- List Locks
+- Delayed post-command refresh
+- Diagnostic commands (`testLogin`, token helpers on v1; API-key validation on v2)
 
 ## Important Notes
 
 - This is an unofficial community integration and is not affiliated with or supported by Sifely or Hubitat.
 - Lock control and status depend on the Sifely cloud service and an active internet connection.
-- The driver uses undocumented cloud endpoints that Sifely could change.
-- Do not post credentials, authentication tokens, or identifying lock information in public logs or screenshots.
-
-## Hubitat Automation
-
-This driver works well with Hubitat automation apps, including Basic Rules and Rule Machine.
-
-Example uses:
-
-- Lock all doors when you leave home.
-- Unlock selected doors when you arrive home using presence detection.
-- Include Sifely locks in scenes and custom automations.
-
-These scenarios have been tested successfully during development.
-
-## Planned for Version 1.5.0
-
-## Roadmap
-## 🗺️ Roadmap
-
-### ✅ v1.0.0
-- Lock / Unlock
-- Refresh
-- Multi-lock support
-- Hubitat automation support
-- Automatic token refresh
-
-### 🚧 v1.5.0 (Planned)
-- Authentication Mode selector
-- Configurable command verification
-- Adjustable verification delay
-- Adjustable retry count
-- Improved diagnostics
+- Do not post credentials, API keys, or identifying lock information in public logs or screenshots.
 
 ## License
 
