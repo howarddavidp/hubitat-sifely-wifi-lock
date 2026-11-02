@@ -74,6 +74,24 @@ Run **List Locks** from the Hubitat device page. The driver logs each lock and r
 - Lock control and status depend on the Sifely cloud service and an active internet connection.
 - Do not post credentials, API keys, or identifying lock information in public logs or screenshots.
 
+## Roadmap
+
+### ✅ v1.0.0
+- Lock / Unlock, Refresh, multi-lock support
+- Hubitat automation support
+- Email/password login with automatic token refresh
+
+### ✅ v2.0.1 (current)
+- Sifely Open API key auth (`cus-openapi.sifely.com`)
+- Same capabilities/commands as v1 for rule compatibility
+
+### 🚧 v3.0.0 (planned)
+- **Single consolidated driver** with a preference to choose auth mode:
+  - **Login** (email/password, legacy server) **or**
+  - **API key** (Open API / connect.sifely.com)
+- One install path for users who prefer either method
+- Keep v1/v2 files available until v3 is stable
+
 ## License
 
 MIT License. See `LICENSE`.
