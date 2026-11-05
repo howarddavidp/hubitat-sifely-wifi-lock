@@ -1,6 +1,8 @@
 # Changelog
 
-## 2.0.2 — 2026-11-02 (in testing / prerelease)
+## 2.0.2 — 2026-11-04 (stable)
+
+Promoted to stable from `v2.0.2-testing` (same commit, 962c634). Now the recommended API-key release.
 
 See the 1.0.1 entry above for the full Problem / Cause / Fix explanation.
 

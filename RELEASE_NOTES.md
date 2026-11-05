@@ -1,4 +1,6 @@
-# In testing: v2.0.2-testing (API key) and v1.0.1-testing (username/password)
+# Sifely WiFi Lock Driver v2.0.2 (stable, API key) — gateway onlineStatus fix
+
+v2.0.2 is now the stable, recommended release (promoted 2026-11-04 from v2.0.2-testing). v1.0.1-testing (username/password) remains in testing.
 
 #### Problem
 Hubitat showed Sifely locks as **"offline (gateway)"** even when the Sifely mobile app showed the gateways and locks as **Online**, and even while Hubitat's lock state and battery refreshes were working.
@@ -19,7 +21,7 @@ No changes to commands or capabilities, so existing rules keep working. If any r
 
 # Sifely WiFi Lock Driver v2.0.1
 
-Recommended release: Open API key authentication.
+Previous release: Open API key authentication.
 
 ## What changed
 
